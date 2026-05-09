@@ -53,7 +53,7 @@ def append_transaction(transaction: dict) -> bool:
 
 
 def get_monthly_summary(year: str, month: str) -> dict:
-    """回傳指定月份的總支出與各來源小計"""
+    """回傳指定月份的總支出、各類別小計、各來源小計"""
     try:
         sheet = _get_sheet()
         rows = sheet.get_all_records()
@@ -61,14 +61,17 @@ def get_monthly_summary(year: str, month: str) -> dict:
 
         total = 0
         by_source = {}
+        by_category = {}
         for row in rows:
             if str(row.get('日期', '')).startswith(prefix):
                 amount = int(row.get('金額', 0))
                 source = row.get('來源', '其他')
+                category = row.get('分類') or '📦 其他'
                 total += amount
                 by_source[source] = by_source.get(source, 0) + amount
+                by_category[category] = by_category.get(category, 0) + amount
 
-        return {'total': total, 'by_source': by_source}
+        return {'total': total, 'by_source': by_source, 'by_category': by_category}
     except Exception as e:
         print(f'[sheets] summary error: {e}')
-        return {'total': 0, 'by_source': {}}
+        return {'total': 0, 'by_source': {}, 'by_category': {}}
