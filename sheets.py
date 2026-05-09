@@ -1,4 +1,5 @@
 import os
+import json
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -13,7 +14,12 @@ HEADERS = ['日期', '時間', '金額', '商家', '來源', '分類', '備註']
 
 
 def _get_sheet():
-    creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+    # 優先從環境變數讀取（Railway），否則讀本地檔案（開發環境）
+    google_creds = os.environ.get('GOOGLE_CREDENTIALS')
+    if google_creds:
+        creds = Credentials.from_service_account_info(json.loads(google_creds), scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
 
