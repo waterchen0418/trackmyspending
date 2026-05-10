@@ -90,6 +90,31 @@ def append_transaction(transaction: dict) -> bool:
         return False
 
 
+def get_last_transaction() -> dict | None:
+    """回傳最後一筆記帳資料"""
+    try:
+        sheet = _get_sheet()
+        rows = sheet.get_all_records()
+        return rows[-1] if rows else None
+    except Exception as e:
+        print(f'[sheets] get_last error: {e}')
+    return None
+
+
+def delete_last_transaction() -> bool:
+    """刪除最後一筆記帳"""
+    try:
+        sheet = _get_sheet()
+        last_row = len(sheet.get_all_values())
+        if last_row <= 1:
+            return False
+        sheet.delete_rows(last_row)
+        return True
+    except Exception as e:
+        print(f'[sheets] delete_last error: {e}')
+    return False
+
+
 def get_monthly_summary(year: str, month: str) -> dict:
     try:
         sheet = _get_sheet()

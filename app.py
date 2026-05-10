@@ -13,7 +13,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from parsers import parse_bank_notification, parse_manual_input
-from sheets import append_transaction, get_monthly_summary, get_merchant_category, save_merchant_category
+from sheets import append_transaction, get_monthly_summary, get_merchant_category, save_merchant_category, get_last_transaction, delete_last_transaction
 
 app = Flask(__name__)
 
@@ -24,6 +24,8 @@ CATEGORIES = ['🍽️ 餐飲', '🛒 超市', '🚗 交通', '🏥 醫療', '�
 
 # 暫存等待分類的交易，key = user_id
 pending: dict = {}
+# 暫存等待確認刪除，key = user_id
+confirm_delete: set = set()
 
 HELP_TEXT = """\
 📖 使用說明
@@ -37,7 +39,10 @@ HELP_TEXT = """\
   直接將台新／國泰／玉山的 LINE 消費通知轉傳給我即可
 
 【查詢本月報表】
-  輸入「報表」查看本月支出統計"""
+  輸入「報表」查看本月支出統計
+
+【刪除最後一筆】
+  輸入「刪除」刪除最後一筆記帳"""
 
 
 def build_success_reply(transaction: dict) -> str:
@@ -119,6 +124,31 @@ def callback():
 def handle_message(event):
     text = event.message.text.strip()
     user_id = event.source.user_id
+
+    # 確認刪除
+    if user_id in confirm_delete:
+        confirm_delete.discard(user_id)
+        if text == '✅ 確認刪除':
+            success = delete_last_transaction()
+            reply_text(event.reply_token, '🗑️ 已刪除最後一筆記錄' if success else '❌ 刪除失敗')
+        else:
+            reply_text(event.reply_token, '取消刪除')
+        return
+
+    # 刪除最後一筆
+    if text in ('刪除', '刪除最後一筆'):
+        last = get_last_transaction()
+        if not last:
+            reply_text(event.reply_token, '❌ 找不到任何記錄')
+            return
+        confirm_delete.add(user_id)
+        qr = QuickReply(items=[
+            QuickReplyItem(action=MessageAction(label='✅ 確認刪除', text='✅ 確認刪除')),
+            QuickReplyItem(action=MessageAction(label='❌ 取消', text='❌ 取消')),
+        ])
+        msg = f"確定要刪除最後一筆？\n📅 {last['日期']} {last['時間']}\n💰 ${int(last['金額']):,}\n🏪 {last['商家']}"
+        reply_text(event.reply_token, msg, quick_reply=qr)
+        return
 
     # 使用者點選了分類按鈕
     if text in CATEGORIES and user_id in pending:
