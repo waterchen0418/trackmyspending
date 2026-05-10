@@ -160,7 +160,7 @@ def handle_message(event):
         reply_text(event.reply_token, msg)
         return
 
-    if text in ('報表', '本月報表', '統計'):
+    if text in ('報表', '本月報表', '統計', '月結', '總結', '本月總結', '本月消費'):
         now = datetime.now()
         reply = build_summary_reply(str(now.year), str(now.month))
         reply_text(event.reply_token, reply)
