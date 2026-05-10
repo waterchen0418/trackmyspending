@@ -13,7 +13,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from parsers import parse_bank_notification, parse_manual_input
-from sheets import append_transaction, get_monthly_summary
+from sheets import append_transaction, get_monthly_summary, get_merchant_category, save_merchant_category
 
 app = Flask(__name__)
 
@@ -124,6 +124,7 @@ def handle_message(event):
     if text in CATEGORIES and user_id in pending:
         transaction = pending.pop(user_id)
         transaction['category'] = text
+        save_merchant_category(transaction['merchant'], text)
         success = append_transaction(transaction)
         msg = build_success_reply(transaction) if success else '❌ 記帳失敗，請稍後再試'
         reply_text(event.reply_token, msg)
@@ -144,8 +145,15 @@ def handle_message(event):
         transaction = parse_manual_input(text)
 
     if transaction:
-        pending[user_id] = transaction
-        ask_category(event.reply_token, transaction['merchant'])
+        remembered = get_merchant_category(transaction['merchant'])
+        if remembered:
+            transaction['category'] = remembered
+            success = append_transaction(transaction)
+            msg = build_success_reply(transaction) if success else '❌ 記帳失敗，請稍後再試'
+            reply_text(event.reply_token, msg)
+        else:
+            pending[user_id] = transaction
+            ask_category(event.reply_token, transaction['merchant'])
     else:
         reply_text(event.reply_token, '❓ 無法辨識格式\n\n輸入「說明」查看使用方式')
 

@@ -10,28 +10,66 @@ SCOPES = [
 
 SPREADSHEET_ID = os.environ['GOOGLE_SPREADSHEET_ID']
 SHEET_NAME = '記帳'
+MEMORY_SHEET_NAME = '商家記憶'
 HEADERS = ['日期', '時間', '金額', '商家', '來源', '分類', '備註']
 
 
-def _get_sheet():
-    # 優先從環境變數讀取（Railway），否則讀本地檔案（開發環境）
+def _get_client():
     google_creds = os.environ.get('GOOGLE_CREDENTIALS')
     if google_creds:
         creds = Credentials.from_service_account_info(json.loads(google_creds), scopes=SCOPES)
     else:
         creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
-    client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    return gspread.authorize(creds)
 
+
+def _get_sheet():
+    spreadsheet = _get_client().open_by_key(SPREADSHEET_ID)
     try:
         sheet = spreadsheet.worksheet(SHEET_NAME)
     except gspread.WorksheetNotFound:
         sheet = spreadsheet.add_worksheet(title=SHEET_NAME, rows=5000, cols=10)
         sheet.append_row(HEADERS)
-        # 凍結標題列
         sheet.freeze(rows=1)
-
     return sheet
+
+
+def _get_memory_sheet():
+    spreadsheet = _get_client().open_by_key(SPREADSHEET_ID)
+    try:
+        sheet = spreadsheet.worksheet(MEMORY_SHEET_NAME)
+    except gspread.WorksheetNotFound:
+        sheet = spreadsheet.add_worksheet(title=MEMORY_SHEET_NAME, rows=1000, cols=2)
+        sheet.append_row(['商家', '分類'])
+        sheet.freeze(rows=1)
+    return sheet
+
+
+def get_merchant_category(merchant: str) -> str | None:
+    """查詢商家的記憶分類，找不到回傳 None"""
+    try:
+        sheet = _get_memory_sheet()
+        records = sheet.get_all_records()
+        for row in records:
+            if row.get('商家') == merchant:
+                return row.get('分類')
+    except Exception as e:
+        print(f'[sheets] get_merchant_category error: {e}')
+    return None
+
+
+def save_merchant_category(merchant: str, category: str) -> None:
+    """儲存或更新商家分類記憶"""
+    try:
+        sheet = _get_memory_sheet()
+        records = sheet.get_all_records()
+        for i, row in enumerate(records, start=2):
+            if row.get('商家') == merchant:
+                sheet.update_cell(i, 2, category)
+                return
+        sheet.append_row([merchant, category])
+    except Exception as e:
+        print(f'[sheets] save_merchant_category error: {e}')
 
 
 def append_transaction(transaction: dict) -> bool:
@@ -43,7 +81,7 @@ def append_transaction(transaction: dict) -> bool:
             transaction['amount'],
             transaction['merchant'],
             transaction['source'],
-            '',
+            transaction.get('category', ''),
             transaction.get('note', ''),
         ])
         return True
@@ -53,7 +91,6 @@ def append_transaction(transaction: dict) -> bool:
 
 
 def get_monthly_summary(year: str, month: str) -> dict:
-    """回傳指定月份的總支出、各類別小計、各來源小計"""
     try:
         sheet = _get_sheet()
         rows = sheet.get_all_records()
