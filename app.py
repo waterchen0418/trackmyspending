@@ -20,7 +20,18 @@ app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 handler = WebhookHandler(os.environ['LINE_CHANNEL_SECRET'])
 
-CATEGORIES = ['🍽️ 餐飲', '🛒 超市', '🚗 交通', '🏥 醫療', '🎮 娛樂', '👕 購物', '🧋 飲料', '🎲 娛樂活動', '📦 其他']
+CATEGORIES = [
+    '🍽️ 餐飲',
+    '🧋 飲料',
+    '🛒 生活用品',
+    '👕 購物',
+    '🚗 交通',
+    '🏋️ 運動',
+    '🎉 社交',
+    '🎮 娛樂',
+    '🏥 醫療',
+    '📦 其他',
+]
 
 # 暫存等待分類的交易，key = user_id
 pending: dict = {}
