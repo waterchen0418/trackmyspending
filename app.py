@@ -98,6 +98,44 @@ def build_summary_reply(year: str, month: str) -> str:
     return '\n'.join(lines)
 
 
+def build_compare_reply(targets: list[tuple[str, str]]) -> str:
+    summaries = [(year, month, get_monthly_summary(year, month)) for year, month in targets]
+    max_total = max((s['total'] for _, _, s in summaries), default=1) or 1
+
+    def bar(amount, max_val, width=8):
+        filled = round(amount / max_val * width)
+        return '▓' * filled + '░' * (width - filled)
+
+    labels = [f"{m}月" for _, m, _ in summaries]
+    header = f"📊 消費比較（{'  vs  '.join(labels)}）"
+    lines = [header, '─' * 20, '']
+
+    # 總計
+    lines.append('💰 總計')
+    for year, month, data in summaries:
+        total = data['total']
+        lines.append(f"  {month}月 ${total:,} {bar(total, max_total)}")
+
+    # 各類別比較
+    all_cats = set()
+    for _, _, data in summaries:
+        all_cats.update(data.get('by_category', {}).keys())
+
+    if all_cats:
+        lines.append('')
+        lines.append('各類別：')
+        for cat in sorted(all_cats):
+            amounts = [s.get('by_category', {}).get(cat, 0) for _, _, s in summaries]
+            if sum(amounts) == 0:
+                continue
+            max_cat = max(amounts) or 1
+            lines.append(f"\n{cat}")
+            for i, (_, month, _) in enumerate(summaries):
+                lines.append(f"  {month}月 ${amounts[i]:,} {bar(amounts[i], max_cat)}")
+
+    return '\n'.join(lines)
+
+
 def reply_text(reply_token: str, text: str, quick_reply: QuickReply = None):
     try:
         msg = TextMessage(text=text)
@@ -178,6 +216,16 @@ def handle_message(event):
         reply = build_summary_reply(str(now.year), str(now.month))
         reply_text(event.reply_token, reply)
         return
+
+    # 多月比較：比較 3月 4月 5月
+    if '比較' in text:
+        now = datetime.now()
+        months = re.findall(r'(?:(\d{4})[年/])?(\d{1,2})月', text)
+        if months:
+            targets = [(m[0] or str(now.year), m[1]) for m in months]
+            reply = build_compare_reply(targets)
+            reply_text(event.reply_token, reply)
+            return
 
     # 上個月
     if text in ('上個月', '上月', '上月報表', '上個月報表'):
