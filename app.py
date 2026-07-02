@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime
@@ -175,6 +176,27 @@ def handle_message(event):
     if text in ('報表', '本月報表', '統計', '月結', '總結', '本月總結', '本月消費'):
         now = datetime.now()
         reply = build_summary_reply(str(now.year), str(now.month))
+        reply_text(event.reply_token, reply)
+        return
+
+    # 上個月
+    if text in ('上個月', '上月', '上月報表', '上個月報表'):
+        now = datetime.now()
+        if now.month == 1:
+            year, month = str(now.year - 1), '12'
+        else:
+            year, month = str(now.year), str(now.month - 1)
+        reply = build_summary_reply(year, month)
+        reply_text(event.reply_token, reply)
+        return
+
+    # 指定月份：4月、4月報表、2026年4月、2026/4
+    month_match = re.search(r'(?:(\d{4})[年/])?(\d{1,2})月', text)
+    if month_match and any(kw in text for kw in ('月', '報表', '統計', '消費', '總結')):
+        now = datetime.now()
+        year = month_match.group(1) or str(now.year)
+        month = month_match.group(2)
+        reply = build_summary_reply(year, month)
         reply_text(event.reply_token, reply)
         return
 
