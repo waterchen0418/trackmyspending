@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -17,7 +18,13 @@ HEADERS = ['日期', '時間', '金額', '商家', '來源', '分類', '備註']
 def _get_client():
     google_creds = os.environ.get('GOOGLE_CREDENTIALS')
     if google_creds:
-        creds = Credentials.from_service_account_info(json.loads(google_creds), scopes=SCOPES)
+        # 支援 base64 編碼或純 JSON
+        try:
+            decoded = base64.b64decode(google_creds).decode('utf-8')
+            info = json.loads(decoded)
+        except Exception:
+            info = json.loads(google_creds)
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     else:
         creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     return gspread.authorize(creds)
