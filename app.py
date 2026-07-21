@@ -14,14 +14,16 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from parsers import parse_bank_notification, parse_manual_input
-from sheets import append_transaction, get_monthly_summary, get_merchant_category, save_merchant_category, get_last_transaction, delete_last_transaction
+from sheets import (append_transaction, get_monthly_summary, get_merchant_category,
+                    save_merchant_category, get_last_transaction, delete_last_transaction,
+                    get_custom_categories, add_custom_category, delete_custom_category)
 
 app = Flask(__name__)
 
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 handler = WebhookHandler(os.environ['LINE_CHANNEL_SECRET'])
 
-CATEGORIES = [
+DEFAULT_CATEGORIES = [
     '🍽️ 餐飲',
     '🧋 飲料',
     '🛒 生活用品',
@@ -34,6 +36,11 @@ CATEGORIES = [
     '💻 訂閱/軟體',
     '📦 其他',
 ]
+
+
+def get_all_categories() -> list[str]:
+    custom = get_custom_categories()
+    return DEFAULT_CATEGORIES[:-1] + custom + [DEFAULT_CATEGORIES[-1]]
 
 # 暫存等待分類的交易，key = user_id
 pending: dict = {}
@@ -55,7 +62,12 @@ HELP_TEXT = """\
   輸入「報表」查看本月支出統計
 
 【刪除最後一筆】
-  輸入「刪除」刪除最後一筆記帳"""
+  輸入「刪除」刪除最後一筆記帳
+
+【管理分類】
+  分類列表            → 查看所有分類
+  新增分類 健身       → 新增自訂分類
+  刪除分類 健身       → 刪除自訂分類"""
 
 
 def build_success_reply(transaction: dict) -> str:
@@ -151,9 +163,10 @@ def reply_text(reply_token: str, text: str, quick_reply: QuickReply = None):
 
 
 def ask_category(reply_token: str, merchant: str):
+    cats = get_all_categories()
     qr = QuickReply(items=[
         QuickReplyItem(action=MessageAction(label=cat, text=cat))
-        for cat in CATEGORIES
+        for cat in cats
     ])
     reply_text(reply_token, f'「{merchant}」請選擇分類：', quick_reply=qr)
 
@@ -201,8 +214,34 @@ def handle_message(event):
         reply_text(event.reply_token, msg, quick_reply=qr)
         return
 
+    # 新增分類
+    add_match = re.match(r'^新增分類\s+(.+)$', text)
+    if add_match:
+        cat = add_match.group(1).strip()
+        if add_custom_category(cat):
+            reply_text(event.reply_token, f'✅ 已新增分類「{cat}」')
+        else:
+            reply_text(event.reply_token, f'⚠️ 分類「{cat}」已存在')
+        return
+
+    # 刪除分類
+    del_match = re.match(r'^刪除分類\s+(.+)$', text)
+    if del_match:
+        cat = del_match.group(1).strip()
+        if delete_custom_category(cat):
+            reply_text(event.reply_token, f'✅ 已刪除分類「{cat}」')
+        else:
+            reply_text(event.reply_token, f'❌ 找不到分類「{cat}」')
+        return
+
+    # 分類列表
+    if text in ('分類列表', '分類', '所有分類'):
+        cats = get_all_categories()
+        reply_text(event.reply_token, '目前分類：\n' + '　'.join(cats))
+        return
+
     # 使用者點選了分類按鈕
-    if text in CATEGORIES and user_id in pending:
+    if text in get_all_categories() and user_id in pending:
         transaction = pending.pop(user_id)
         transaction['category'] = text
         save_merchant_category(transaction['merchant'], text)

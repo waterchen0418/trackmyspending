@@ -12,6 +12,7 @@ SCOPES = [
 SPREADSHEET_ID = os.environ['GOOGLE_SPREADSHEET_ID']
 SHEET_NAME = '記帳'
 MEMORY_SHEET_NAME = '商家記憶'
+CATEGORY_SHEET_NAME = '自訂分類'
 HEADERS = ['日期', '時間', '金額', '商家', '來源', '分類', '備註']
 
 
@@ -50,6 +51,56 @@ def _get_memory_sheet():
         sheet.append_row(['商家', '分類'])
         sheet.freeze(rows=1)
     return sheet
+
+
+def _get_category_sheet():
+    spreadsheet = _get_client().open_by_key(SPREADSHEET_ID)
+    try:
+        sheet = spreadsheet.worksheet(CATEGORY_SHEET_NAME)
+    except gspread.WorksheetNotFound:
+        sheet = spreadsheet.add_worksheet(title=CATEGORY_SHEET_NAME, rows=100, cols=1)
+        sheet.append_row(['分類'])
+        sheet.freeze(rows=1)
+    return sheet
+
+
+def get_custom_categories() -> list[str]:
+    """從 Sheets 取得自訂分類清單"""
+    try:
+        sheet = _get_category_sheet()
+        records = sheet.get_all_records()
+        return [row['分類'] for row in records if row.get('分類')]
+    except Exception as e:
+        print(f'[sheets] get_custom_categories error: {e}')
+    return []
+
+
+def add_custom_category(category: str) -> bool:
+    """新增自訂分類"""
+    try:
+        sheet = _get_category_sheet()
+        records = sheet.get_all_records()
+        if any(row.get('分類') == category for row in records):
+            return False  # 已存在
+        sheet.append_row([category])
+        return True
+    except Exception as e:
+        print(f'[sheets] add_custom_category error: {e}')
+    return False
+
+
+def delete_custom_category(category: str) -> bool:
+    """刪除自訂分類"""
+    try:
+        sheet = _get_category_sheet()
+        records = sheet.get_all_records()
+        for i, row in enumerate(records, start=2):
+            if row.get('分類') == category:
+                sheet.delete_rows(i)
+                return True
+    except Exception as e:
+        print(f'[sheets] delete_custom_category error: {e}')
+    return False
 
 
 def get_merchant_category(merchant: str) -> str | None:
